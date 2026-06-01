@@ -1,4 +1,3 @@
-cat > index.js <<'EOF'
 const express = require("express");
 const path = require("path");
 
@@ -286,4 +285,4 @@ app.get("/account", (req, res) => {
 app.listen(port, () => {
   console.log(`Campus Board vulneravel disponível em http://localhost:${port}`);
 });
-EOF
+
