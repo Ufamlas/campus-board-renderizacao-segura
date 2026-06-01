@@ -1,15 +1,9 @@
+cat > index.js <<'EOF'
 const express = require("express");
 const path = require("path");
-const helmet = require("helmet");
-const session = require("express-session");
-const createDOMPurify = require("dompurify");
-const { JSDOM } = require("jsdom");
 
 const app = express();
 const port = 8080;
-
-const window = new JSDOM("").window;
-const DOMPurify = createDOMPurify(window);
 
 const messages = [
   {
@@ -22,44 +16,19 @@ const messages = [
   },
 ];
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-function sanitizeMessageHtml(value) {
-  return DOMPurify.sanitize(String(value ?? ""), {
-    ALLOWED_TAGS: [
-      "p",
-      "br",
-      "strong",
-      "b",
-      "em",
-      "i",
-      "ul",
-      "ol",
-      "li",
-      "a",
-      "code",
-    ],
-    ALLOWED_ATTR: ["href", "title"],
-  });
-}
-
-function page(title, content, extraHead = "") {
+function page(title, content) {
   return `
 <!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(title)} · Campus Board</title>
+  <title>${title} · Campus Board</title>
   <link rel="stylesheet" href="/styles.css">
-  ${extraHead}
 </head>
 <body>
   <header class="topbar">
@@ -91,44 +60,6 @@ function page(title, content, extraHead = "") {
 </html>
 `;
 }
-
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
-
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      useDefaults: true,
-      directives: {
-        "default-src": ["'self'"],
-        "script-src": ["'self'"],
-        "style-src": ["'self'"],
-        "img-src": ["'self'", "data:"],
-        "object-src": ["'none'"],
-        "base-uri": ["'self'"],
-        "frame-ancestors": ["'none'"],
-        "form-action": ["'self'"],
-      },
-    },
-  })
-);
-
-app.use(
-  session({
-    name: "campus_session",
-    secret: "segredo-de-laboratorio-trocar-em-producao",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: false,
-      maxAge: 1000 * 60 * 60,
-    },
-  })
-);
-
-app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/", (req, res) => {
   res.send(
@@ -187,22 +118,19 @@ app.get("/", (req, res) => {
 
 app.get("/messages", (req, res) => {
   const list = messages
-    .map((message) => {
-      const safeAuthor = escapeHtml(message.author);
-      const safeText = sanitizeMessageHtml(message.text);
-
-      return `
+    .map(
+      (message) => `
 <article class="message">
   <div class="message-head">
-    <strong>${safeAuthor}</strong>
+    <strong>${message.author}</strong>
     <span>agora</span>
   </div>
   <div class="message-body">
-    ${safeText}
+    ${message.text}
   </div>
 </article>
-`;
-    })
+`
+    )
     .join("");
 
   res.send(
@@ -254,24 +182,20 @@ app.post("/messages", (req, res) => {
 
 app.get("/search", (req, res) => {
   const q = req.query.q || "";
-  const safeQ = escapeHtml(q);
 
   const results = messages
     .filter((message) => {
       const haystack = `${message.author} ${message.text}`.toLowerCase();
       return haystack.includes(String(q).toLowerCase());
     })
-    .map((message) => {
-      const safeAuthor = escapeHtml(message.author);
-      const safeText = sanitizeMessageHtml(message.text);
-
-      return `
+    .map(
+      (message) => `
 <article class="message compact">
-  <strong>${safeAuthor}</strong>
-  <p>${safeText}</p>
+  <strong>${message.author}</strong>
+  <p>${message.text}</p>
 </article>
-`;
-    })
+`
+    )
     .join("");
 
   res.send(
@@ -281,18 +205,18 @@ app.get("/search", (req, res) => {
 <section class="page-header">
   <p class="eyebrow">pesquisa</p>
   <h1>Resultados da busca</h1>
-  <p class="lead">Resultados encontrados para: <strong>${safeQ}</strong></p>
+  <p class="lead">Resultados encontrados para: <strong>${q}</strong></p>
 </section>
 
 <section class="panel">
   <form method="GET" action="/search" class="search-form">
-    <input name="q" value="${safeQ}" placeholder="Pesquisar no mural">
+    <input name="q" value="${q}" placeholder="Pesquisar no mural">
     <button type="submit">Buscar</button>
   </form>
 </section>
 
 <section class="messages">
-  ${results || `<p class="empty">Nenhum resultado encontrado para <strong>${safeQ}</strong>.</p>`}
+  ${results || `<p class="empty">Nenhum resultado encontrado para <strong>${q}</strong>.</p>`}
 </section>
 `
     )
@@ -321,17 +245,21 @@ app.get("/profile", (req, res) => {
   <pre>http://localhost:8080/profile#Larissa</pre>
 </section>
 
-<script src="/profile.js"></script>
+<script>
+  const value = decodeURIComponent(location.hash.slice(1) || "Visitante");
+  document.getElementById("visitor-name").innerHTML = value;
+</script>
 `
     )
   );
 });
 
 app.get("/account", (req, res) => {
-  req.session.user = {
-    name: "visitante local",
-    role: "user",
-  };
+  res.cookie("campus_session", "session-demo-12345", {
+    httpOnly: false,
+    sameSite: "lax",
+    secure: false,
+  });
 
   res.send(
     page(
@@ -341,7 +269,7 @@ app.get("/account", (req, res) => {
   <p class="eyebrow">área da conta</p>
   <h1>Sessão iniciada</h1>
   <p class="lead">
-    Uma sessão de navegação foi criada para manter o acesso do usuário ao ambiente.
+    Um cookie de sessão de demonstração foi criado para manter a navegação do usuário.
   </p>
 </section>
 
@@ -356,5 +284,6 @@ app.get("/account", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Campus Board disponível em http://localhost:${port}`);
+  console.log(`Campus Board vulneravel disponível em http://localhost:${port}`);
 });
+EOF
