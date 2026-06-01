@@ -4,7 +4,6 @@ const helmet = require("helmet");
 const session = require("express-session");
 const createDOMPurify = require("dompurify");
 const { JSDOM } = require("jsdom");
-const crypto = require("crypto");
 
 const app = express();
 const port = 8080;
@@ -48,27 +47,7 @@ function sanitizeMessageHtml(value) {
       "code",
     ],
     ALLOWED_ATTR: ["href", "title"],
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
   });
-}
-
-function getCsrfToken(req) {
-  if (!req.session.csrfToken) {
-    req.session.csrfToken = crypto.randomBytes(32).toString("hex");
-  }
-
-  return req.session.csrfToken;
-}
-
-function requireCsrf(req, res, next) {
-  const expected = req.session.csrfToken;
-  const received = req.body._csrf;
-
-  if (!expected || !received || received !== expected) {
-    return res.status(403).type("text/plain").send("CSRF token inválido.");
-  }
-
-  next();
 }
 
 function page(title, content, extraHead = "") {
@@ -113,42 +92,23 @@ function page(title, content, extraHead = "") {
 `;
 }
 
-app.disable("x-powered-by");
-
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 app.use(
   helmet({
     contentSecurityPolicy: {
-      useDefaults: false,
+      useDefaults: true,
       directives: {
         "default-src": ["'self'"],
         "script-src": ["'self'"],
-        "script-src-attr": ["'none'"],
         "style-src": ["'self'"],
-        "style-src-attr": ["'none'"],
         "img-src": ["'self'", "data:"],
-        "font-src": ["'self'"],
-        "connect-src": ["'self'"],
         "object-src": ["'none'"],
         "base-uri": ["'self'"],
         "frame-ancestors": ["'none'"],
         "form-action": ["'self'"],
-        "frame-src": ["'none'"],
-        "child-src": ["'none'"],
-        "worker-src": ["'none'"],
-        "media-src": ["'none'"],
-        "manifest-src": ["'self'"],
       },
-    },
-    frameguard: {
-      action: "deny",
-    },
-    noSniff: true,
-    hidePoweredBy: true,
-    referrerPolicy: {
-      policy: "no-referrer",
     },
   })
 );
@@ -169,32 +129,6 @@ app.use(
 );
 
 app.use(express.static(path.join(__dirname, "public")));
-
-app.get("/robots.txt", (req, res) => {
-  res.type("text/plain").send("User-agent: *\nDisallow:\n");
-});
-
-app.get("/sitemap.xml", (req, res) => {
-  res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>http://localhost:8080/</loc>
-  </url>
-  <url>
-    <loc>http://localhost:8080/messages</loc>
-  </url>
-  <url>
-    <loc>http://localhost:8080/search</loc>
-  </url>
-  <url>
-    <loc>http://localhost:8080/profile</loc>
-  </url>
-  <url>
-    <loc>http://localhost:8080/account</loc>
-  </url>
-</urlset>
-`);
-});
 
 app.get("/", (req, res) => {
   res.send(
@@ -252,8 +186,6 @@ app.get("/", (req, res) => {
 });
 
 app.get("/messages", (req, res) => {
-  const csrfToken = getCsrfToken(req);
-
   const list = messages
     .map((message) => {
       const safeAuthor = escapeHtml(message.author);
@@ -287,8 +219,6 @@ app.get("/messages", (req, res) => {
 
 <section class="panel">
   <form method="POST" action="/messages" class="form">
-    <input type="hidden" name="_csrf" value="${csrfToken}">
-
     <div class="row">
       <label>
         Nome
@@ -313,7 +243,7 @@ app.get("/messages", (req, res) => {
   );
 });
 
-app.post("/messages", requireCsrf, (req, res) => {
+app.post("/messages", (req, res) => {
   messages.unshift({
     author: req.body.author || "Anônimo",
     text: req.body.text || "",
@@ -356,7 +286,7 @@ app.get("/search", (req, res) => {
 
 <section class="panel">
   <form method="GET" action="/search" class="search-form">
-    <input name="q" placeholder="Pesquisar no mural">
+    <input name="q" value="${safeQ}" placeholder="Pesquisar no mural">
     <button type="submit">Buscar</button>
   </form>
 </section>
@@ -426,5 +356,5 @@ app.get("/account", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Campus Board seguro disponível em http://localhost:${port}`);
+  console.log(`Campus Board disponível em http://localhost:${port}`);
 });
