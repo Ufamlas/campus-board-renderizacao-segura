@@ -1,143 +1,104 @@
-= A sample application with known vulnerabilities - JavaScript, Express
+# Campus Board - Renderizacao Segura de Conteudo
 
-A sample application with known issues for testing various linters, scanners, and scan automation.
+Miniaplicacao Node.js/Express usada em atividade pratica sobre renderizacao segura de conteudo e mitigacao de Cross-Site Scripting (XSS).
 
-There are two branches in this repository:
+A aplicacao simula um mural interno com busca, mensagens, perfil de visitante e sessao. A versao vulneravel foi usada para demonstrar XSS refletido, XSS armazenado, DOM-based XSS e cookie acessivel por JavaScript. A versao corrigida aplica sanitizacao com DOMPurify, Content Security Policy, protecao de cookies e correcoes de renderizacao.
 
-[cols="1,3"]
-|===
-| Branch name | Description
+## Branches
 
-| `vulnerable` (default)
-| This branch is the default, containing all sorts of basic vulnerabilities split into different commits, which is useful for scanner automation testing.
+- main: versao segura/corrigida.
+- app-vulneravel-bonito: versao vulneravel usada para evidencias antes das correcoes.
 
-The corresponding container image: `samoylenko/vulnerable:vulnerable` (also tagged as `latest` for convenience)
+## Como executar
 
-| `fixed`
-| This branch contains vulnerability fixes and is split into different commits to allow for thorough scanner automation and resolution logic testing.
+Instale as dependencias:
 
-The corresponding container image: `samoylenko/vulnerable:fixed`
-|===
+    npm install
 
-== Details
+Execute a aplicacao:
 
-This project uses:
+    npm run start
 
-[cols="1,3"]
-|===
-| Component | In Use
+A aplicacao ficara disponivel em:
 
-| Platform
-| https://nodejs.org/[NodeJS]
+    http://localhost:8080
 
-| Language(s)
-| JavaScript (https://www.ecma-international.org/publications-and-standards/standards/[ECMAScript])
+## Funcionalidades da aplicacao
 
-| Build
-| https://www.npmjs.com/[npm]
+- Pagina inicial do Campus Board.
+- Mural de mensagens.
+- Busca de avisos.
+- Perfil de visitante com nome definido via hash da URL.
+- Pagina de conta com criacao de sessao.
 
-| Framework
-| https://expressjs.com/[Express]
-|===
+## Vulnerabilidades demonstradas na versao vulneravel
 
-=== Security issues
+Na branch app-vulneravel-bonito, foram demonstradas as seguintes fragilidades:
 
-Purposively added security issues:
+- XSS refletido na pagina de busca.
+- XSS armazenado no mural de mensagens.
+- DOM-based XSS na pagina de perfil.
+- Cookie de sessao acessivel via document.cookie.
+- Ausencia de Content Security Policy restritiva.
 
-|===
-| Vulnerability Type | Description | Location | PoC
+## Mitigacoes implementadas na versao segura
 
-| Cross Site Scripting (XSS)
-| The `/hello` endpoint generates page output in code. It expects a name as a parameter to say `"Hello, $name"` and concatenates the user input to the output without escaping it.
-| `res.send(`Hello, ${req.query.name}`)`
-| http://localhost:8080/hello?name=%3Cscript%3Ealert(1)%3C/script%3E
+Na branch main, foram aplicadas as seguintes correcoes:
 
-| Cross Site Scripting (XSS)
-| The `/view` endpoint uses a template engine to say `"Hello, $name"` and misuses template syntax, leaving the user input unescaped.
-| `p!= 'Hello, ' + name`
-| http://localhost:8080/view?name=%3Cscript%3Ealert(1)%3C/script%3E
+- Sanitizacao de HTML no mural com DOMPurify.sanitize().
+- Codificacao de saida na pagina de busca.
+- Substituicao de innerHTML por textContent no perfil.
+- Content Security Policy com script-src self.
+- Cookie de sessao com HttpOnly e SameSite=Lax.
+- Cabecalhos de seguranca via Helmet.
+- Token Anti-CSRF no formulario de mensagens.
+- Remocao do cabecalho X-Powered-By.
+- Uso de X-Content-Type-Options: nosniff.
 
-| Cross Site Scripting (XSS)
-| The `/user` endpoint reflects a value from the database directly to the page. Today, it's an ID, but in non statically typed languages this is still always a scenario.
-| `res.send(user.rows[0]);`
-| This one doesn’t have a PoC exploit since it reflects a number from the database to the page. But this is a legit injection scenario that has to be handled. We use it for SAST issue prioritization testing.
+## Payloads utilizados
 
-| Hardcoded credentials
-| There are secrets in the code committed to the repository.
-| `POSTGRES_PASSWORD=mysecretpassword`
+XSS refletido:
 
-`password: "mysecretpassword"`
-| N/A
+    <script>alert(1)</script>
 
-| SQL Injection (SQLi)
-| The SQL query is constructed using string concatenation instead of using a parameterized query.
-| `client.query(`select * from users where id = ${req.params.id}`)`
-| http://localhost:8080/user/1;drop%20table%20users
+XSS armazenado:
 
-`sqlmap -u localhost:8080/user/1 --all`
+    <img src=x onerror=alert(1)>
 
-| Use of a vulnerable (outdated) library |This project includes`lodash` library version with known vulnerabilities.
-| `"lodash": "4.17.20"`
-| https://www.cvedetails.com/cve/CVE-2021-23337/[CVE-2021-23337], https://www.cvedetails.com/cve/CVE-2020-28500/[CVE-2020-28500], etc...
-|===
+DOM-based XSS:
 
-=== Other issues
+    <img src=x onerror=alert(1)>
 
-* There is at least one unused variable
-* The project has no tests
-* The project dependencies are not locked
-* A few `var` instead of `const` (https://eslint.org/docs/rules/no-var[ESlint rule: `no-var`])
-* Library `lodash` is declared but never used
-* Style is inconsistent.
-E.g. a https://standardjs.com/[Standard Style] linter would complain.
-* Additionally, a large list of base container CVEs in the container image created from `vulnerable` branch
+Teste de exposicao de cookie:
 
-== Building running the project
+    document.cookie
 
-CAUTION: This project contains security vulnerabilities and should never be run in production environments.
+## Evidencias
 
-Requirements:
+As evidencias incluem:
 
-* https://docs.npmjs.com/downloading-and-installing-node-js-and-npm[NodeJS and npm]
-* https://www.docker.com/[Docker]
+- Prints da versao vulneravel.
+- Prints da versao corrigida.
+- Relatorio OWASP ZAP antes das correcoes.
+- Relatorio OWASP ZAP apos as correcoes.
+- Relatorio final da atividade.
 
-Local project execution:
+## Organizacao sugerida das evidencias
 
-[source,shell]
-----
-# Clone the project
-git clone https://github.com/samoylenko/vulnerable-app-nodejs-express.git
-cd vulnerable-app-nodejs-express
+    evidencias/
+      antes_vulneravel/
+      depois_corrigido/
 
-# Install dependencies
-npm i
+    zap/
+      zap_before_vulnerable.pdf
+      zap_after_secure.pdf
 
-# Start the database container
-docker run --name some-postgres -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d postgres
+    relatorio/
+      Relatorio_Renderizacao_Segura_Campus_Board.pdf
+      
 
-# Start the application
-npm run start
-----
+## Observacoes
 
-Container execution:
+O ambiente foi executado localmente em http://localhost:8080. Os testes com OWASP ZAP foram realizados somente contra a aplicacao local, em ambiente autorizado.
 
-[source,shell]
-----
-# Start Postgres first
-docker run --name some-postgres -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d postgres
-
-# Start the vulnerable container
-docker run --network host --rm samoylenko/vulnerable
-----
-
-In order to successfully run a `fixed` version of the container, secrets need to be injected into the container, for example:
-
-[source,shell]
-----
-docker run \
-  -e PGUSER=postgres \
-  -e PGDATABASE=postgres \
-  -e PGPASSWORD=mysecretpassword \
-  --network=host --rm \
-  samoylenko/vulnerable:fixed
-----
+A versao segura mitiga os payloads testados e adiciona camadas de protecao, mas nao deve ser interpretada como uma aplicacao de producao completa.
