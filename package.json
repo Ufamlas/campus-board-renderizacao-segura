@@ -8,9 +8,13 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "dompurify": "^3.4.7",
     "express": "*",
+    "express-session": "^1.19.0",
+    "helmet": "^8.2.0",
+    "jsdom": "^29.1.1",
+    "lodash": "4.17.20",
     "pg": "*",
-    "pug": "*",
-    "lodash": "4.17.20"
+    "pug": "*"
   }
 }
